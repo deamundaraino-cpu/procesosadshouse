@@ -1,0 +1,545 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum Rol {
+  DIRECTOR
+  ACCOUNT_MANAGER
+  ESPECIALISTA
+  CLIENTE
+}
+
+enum EstadoCliente {
+  ACTIVO
+  PAUSADO
+  COMPLETADO
+  CANCELADO
+}
+
+enum EstadoTarea {
+  PENDIENTE
+  EN_PROGRESO
+  BLOQUEADA
+  COMPLETADA
+  CANCELADA
+}
+
+enum TipoAprobador {
+  CLIENTE
+  DIRECTOR
+  ACCOUNT_MANAGER
+}
+
+enum OrigenDato {
+  IA
+  CLIENTE
+  EQUIPO
+  IMPORTADO
+}
+
+enum TipoAlerta {
+  VENCIDA
+  CONFLICTO_IA
+  APROBACION_PENDIENTE
+  BLOQUEADA
+  IA_GENERO
+  DISCREPANCIA
+  CAMPOS_PENDIENTES
+}
+
+enum SeveridadAlerta {
+  CRITICO
+  IMPORTANTE
+  COMPLEMENTARIO
+}
+
+enum EstadoAlerta {
+  ACTIVA
+  RESUELTA
+  DESCARTADA
+}
+
+enum TipoEntregable {
+  DOCUMENTO
+  PDF
+  DATOS
+  CREATIVOS
+  ACCESOS
+  REPORTE
+}
+
+enum FormatoReporte {
+  HTML
+  TEXTO
+  PDF
+}
+
+enum EstadoAprobacion {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
+enum EstadoInvestigacion {
+  BORRADOR
+  EN_PROCESO
+  COMPLETADO
+}
+
+enum EstadoSubItem {
+  PENDIENTE
+  OK
+  NO_APLICA
+}
+
+// ─── USUARIOS ────────────────────────────────────────────────────────────────
+
+model Usuario {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  nombre    String
+  rol       Rol
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientesAsignados      Cliente[]            @relation("AccountManager")
+  tareasAsignadas        TareaAsignado[]
+  alertasDestino         AlertaDestinatario[]
+  aprobacionesRealizadas Aprobacion[]
+  reunionesAsistidas     ReunionAsistente[]
+}
+
+// ─── CLIENTES ────────────────────────────────────────────────────────────────
+
+model Cliente {
+  id               String        @id @default(cuid())
+  nombre           String
+  empresa          String
+  email            String
+  telefono         String?
+  pais             String?
+  sector           String?
+  estado           EstadoCliente @default(ACTIVO)
+  fechaIngreso     DateTime      @default(now())
+  accountManagerId String?
+  tokenPortal      String        @unique @default(cuid())
+  driveRootId      String?
+  notas            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  accountManager Usuario?       @relation("AccountManager", fields: [accountManagerId], references: [id])
+  tareas         Tarea[]
+  brief          BriefSeccion[]
+  buyerPersonas  BuyerPersona[]
+  accesos        Acceso[]
+  documentos     DocumentoCargado[]
+  entregables    Entregable[]
+  alertas        Alerta[]
+  reportes           Reporte[]
+  reuniones          Reunion[]
+  aprobaciones       Aprobacion[]
+  investigaciones    InvestigacionMercado[]
+
+  @@index([estado])
+  @@index([accountManagerId])
+}
+
+// ─── FASES ───────────────────────────────────────────────────────────────────
+
+model Fase {
+  id          String @id @default(cuid())
+  codigo      String @unique
+  nombre      String
+  descripcion String?
+  orden       Int
+  diaInicio   Int
+  diaFin      Int
+  color       String @default("#6366f1")
+
+  tareas          Tarea[]
+  tareaTemplates  TareaTemplate[]
+}
+
+// ─── TAREA TEMPLATE (plantilla global) ────────────────────────────────────────
+
+model TareaTemplate {
+  id                    String         @id @default(cuid())
+  faseId                String
+  codigo                String         @unique
+  nombre                String
+  descripcion           String?
+  diaInicio             Int
+  duracionDias          Int            @default(1)
+  esParalela            Boolean        @default(false)
+  requiereAprobacion    Boolean        @default(false)
+  tipoAprobador         TipoAprobador?
+  puntoIA               Boolean        @default(false)
+  nivelAutomatizacionIA Int            @default(0)
+  responsableRoles      Rol[]
+  subtareas             Json?
+  entregablesTemplate   Json?
+  bloqueadoresPor       String[]
+
+  fase Fase @relation(fields: [faseId], references: [id])
+}
+
+// ─── TAREAS (instancias por cliente) ─────────────────────────────────────────
+
+model Tarea {
+  id                    String        @id @default(cuid())
+  clienteId             String
+  faseId                String
+  templateCodigo        String?
+  nombre                String
+  descripcion           String?
+  diaInicio             Int
+  diaFin                Int
+  fechaInicio           DateTime?
+  fechaVencimiento      DateTime?
+  estado                EstadoTarea   @default(PENDIENTE)
+  porcentajeCompletado  Int           @default(0)
+  esParalela            Boolean       @default(false)
+  requiereAprobacion    Boolean       @default(false)
+  tipoAprobador         TipoAprobador?
+  puntoIA               Boolean       @default(false)
+  nivelAutomatizacionIA Int           @default(0)
+  notas                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  cliente      Cliente           @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  fase         Fase              @relation(fields: [faseId], references: [id])
+  asignados    TareaAsignado[]
+  entregables  Entregable[]
+  dependencias TareaDependencia[] @relation("TareaBase")
+  requeridaPor TareaDependencia[] @relation("TareaRequerida")
+  comentarios  TareaComentario[]
+  aprobaciones Aprobacion[]
+  subItems     SubItemTarea[]
+
+  @@index([clienteId])
+  @@index([faseId])
+  @@index([estado])
+  @@index([fechaVencimiento])
+}
+
+model TareaDependencia {
+  tareaId  String
+  prereqId String
+
+  tarea  Tarea @relation("TareaBase", fields: [tareaId], references: [id], onDelete: Cascade)
+  prereq Tarea @relation("TareaRequerida", fields: [prereqId], references: [id], onDelete: Cascade)
+
+  @@id([tareaId, prereqId])
+}
+
+model TareaAsignado {
+  tareaId   String
+  usuarioId String
+
+  tarea   Tarea   @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([tareaId, usuarioId])
+}
+
+model TareaComentario {
+  id          String   @id @default(cuid())
+  tareaId     String
+  autorNombre String
+  autorRol    Rol
+  contenido   String
+  createdAt   DateTime @default(now())
+
+  tarea Tarea @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+}
+
+model SubItemTarea {
+  id          String        @id @default(cuid())
+  tareaId     String
+  seccion     String?
+  texto       String
+  estado      EstadoSubItem @default(PENDIENTE)
+  observacion String?
+  orden       Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tarea Tarea @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+
+  @@index([tareaId])
+}
+
+// ─── ENTREGABLES ─────────────────────────────────────────────────────────────
+
+model Entregable {
+  id                 String           @id @default(cuid())
+  clienteId          String
+  tareaId            String?
+  nombre             String
+  tipo               TipoEntregable
+  version            Int              @default(1)
+  url                String?
+  driveId            String?
+  requiereAprobacion Boolean          @default(false)
+  estadoAprobacion   EstadoAprobacion @default(PENDIENTE)
+  aprobadoPor        TipoAprobador?
+  notas              String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  cliente      Cliente      @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  tarea        Tarea?       @relation(fields: [tareaId], references: [id])
+  aprobaciones Aprobacion[]
+
+  @@index([clienteId])
+  @@index([estadoAprobacion])
+}
+
+// ─── APROBACIONES ─────────────────────────────────────────────────────────────
+
+model Aprobacion {
+  id             String           @id @default(cuid())
+  clienteId      String
+  tareaId        String?
+  entregableId   String?
+  tipo           TipoAprobador
+  estado         EstadoAprobacion @default(PENDIENTE)
+  aprobadorId    String?
+  motivoRechazo  String?
+  deadline       DateTime?
+  resueltaAt     DateTime?
+  createdAt      DateTime         @default(now())
+
+  cliente    Cliente     @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  tarea      Tarea?      @relation(fields: [tareaId], references: [id])
+  entregable Entregable? @relation(fields: [entregableId], references: [id])
+  aprobador  Usuario?    @relation(fields: [aprobadorId], references: [id])
+
+  @@index([clienteId])
+  @@index([estado])
+}
+
+// ─── DOCUMENTOS CARGADOS ─────────────────────────────────────────────────────
+
+model DocumentoCargado {
+  id              String    @id @default(cuid())
+  clienteId       String
+  nombre          String
+  nombreOriginal  String
+  mimeType        String
+  tamanoBytes     Int
+  storageUrl      String
+  textoProcesado  String?   @db.Text
+  extraccionIA    Json?
+  procesadoAt     DateTime?
+  validadoAt      DateTime?
+  validadoPor     String?
+  tieneConflictos Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+}
+
+// ─── BRIEF (22 secciones) ─────────────────────────────────────────────────────
+
+model BriefSeccion {
+  id            String   @id @default(cuid())
+  clienteId     String
+  seccionCodigo String
+  seccionNombre String
+  orden         Int
+  campos        Json
+  completado    Int      @default(0)
+  clienteReviso Boolean  @default(false)
+  equipoReviso  Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@unique([clienteId, seccionCodigo])
+  @@index([clienteId])
+}
+
+// ─── BUYER PERSONAS ───────────────────────────────────────────────────────────
+
+model BuyerPersona {
+  id             String     @id @default(cuid())
+  clienteId      String
+  numero         Int
+  nombre         String?
+  edad           String?
+  genero         String?
+  ubicacion      String?
+  ocupacion      String?
+  ingresos       String?
+  educacion      String?
+  motivaciones   Json?
+  frustraciones  Json?
+  objetivos      Json?
+  comportamiento Json?
+  buyerJourney   Json?
+  citas          Json?
+  origen         OrigenDato @default(IA)
+  confianza      Float      @default(0)
+  validado       Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@unique([clienteId, numero])
+}
+
+// ─── ACCESOS TÉCNICOS ─────────────────────────────────────────────────────────
+
+model Acceso {
+  id            String   @id @default(cuid())
+  clienteId     String
+  plataforma    String
+  tipo          String
+  identificador String?
+  credenciales  Json?
+  estado        String   @default("PENDIENTE")
+  notas         String?
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+}
+
+// ─── REUNIONES ────────────────────────────────────────────────────────────────
+
+model Reunion {
+  id           String   @id @default(cuid())
+  clienteId    String
+  titulo       String
+  fecha        DateTime
+  duracionMin  Int      @default(60)
+  tipo         String   @default("VIRTUAL")
+  link         String?
+  notas        String?  @db.Text
+  grabacionUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  cliente    Cliente           @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  asistentes ReunionAsistente[]
+  documentos ReunionDocumento[]
+}
+
+model ReunionAsistente {
+  reunionId  String
+  usuarioId  String
+  confirmado Boolean @default(false)
+
+  reunion Reunion @relation(fields: [reunionId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([reunionId, usuarioId])
+}
+
+model ReunionDocumento {
+  reunionId String
+  nombre    String
+  url       String
+
+  reunion Reunion @relation(fields: [reunionId], references: [id], onDelete: Cascade)
+
+  @@id([reunionId, nombre])
+}
+
+// ─── ALERTAS ─────────────────────────────────────────────────────────────────
+
+model Alerta {
+  id             String          @id @default(cuid())
+  clienteId      String
+  tipo           TipoAlerta
+  severidad      SeveridadAlerta
+  estado         EstadoAlerta    @default(ACTIVA)
+  titulo         String
+  descripcion    String
+  referenciaId   String?
+  referenciaTipo String?
+  resueltaAt     DateTime?
+  createdAt      DateTime        @default(now())
+
+  cliente       Cliente              @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  destinatarios AlertaDestinatario[]
+
+  @@index([clienteId])
+  @@index([estado])
+  @@index([severidad])
+  @@index([createdAt])
+}
+
+model AlertaDestinatario {
+  alertaId  String
+  usuarioId String
+  leida     Boolean   @default(false)
+  leidaAt   DateTime?
+
+  alerta  Alerta  @relation(fields: [alertaId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([alertaId, usuarioId])
+}
+
+// ─── REPORTES ─────────────────────────────────────────────────────────────────
+
+model Reporte {
+  id           String         @id @default(cuid())
+  clienteId    String
+  tipo         String         @default("SEMANAL")
+  formato      FormatoReporte
+  titulo       String
+  contenido    String         @db.Text
+  periodo      String?
+  storageUrl   String?
+  autoGenerado Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@index([createdAt])
+}
+
+model InvestigacionMercado {
+  id                   String              @id @default(cuid())
+  clienteId            String
+  nombreProducto       String
+  descripcionProducto  String              @db.Text
+  checklistInicio      Json                @default("[]")
+  buyerPersona         String?             @db.Text
+  nombresProducto      String?             @db.Text
+  dolores              String?             @db.Text
+  objeciones           String?             @db.Text
+  angulosVenta         String?             @db.Text
+  propuestaUnicaValor  String?             @db.Text
+  beneficiosProducto   String?             @db.Text
+  antesYDespues        String?             @db.Text
+  pruebaSocial         String?             @db.Text
+  leadMagnet           String?             @db.Text
+  estructuraLanding    String?             @db.Text
+  estado               EstadoInvestigacion @default(BORRADOR)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  cliente              Cliente             @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+}
