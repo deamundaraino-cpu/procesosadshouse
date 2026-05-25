@@ -3,8 +3,6 @@ import { prisma } from "@/lib/db";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(
   request: NextRequest,
   { params }: { params: { clienteId: string } }
@@ -23,6 +21,7 @@ export async function POST(
   const portalUrl = `${appUrl}/portal/${cliente.tokenPortal}`;
 
   if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== "[RESEND_API_KEY]") {
+    const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL ?? "onboarding@adshouseagencia.com",
       to: cliente.email,

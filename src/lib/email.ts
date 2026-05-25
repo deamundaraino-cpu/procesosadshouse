@@ -1,11 +1,16 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL ?? "onboarding@adshouseagencia.com";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 function isResendConfigured() {
   return !!process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== "[RESEND_API_KEY]";
+}
+
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
 }
 
 // ─── Plantilla base ───────────────────────────────────────────────────────────
@@ -49,7 +54,7 @@ export async function enviarPortalLink(cliente: {
   if (!isResendConfigured()) return;
   const url = `${APP_URL}/portal/${cliente.tokenPortal}`;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: cliente.email,
     subject: `Tu portal de seguimiento está listo — ${cliente.empresa}`,
@@ -80,7 +85,7 @@ export async function enviarAprobacionSolicitada(params: {
     ? `<p style="color:#f59e0b;font-size:13px;margin-top:8px;">⏰ Fecha límite de aprobación: <strong>${params.deadline.toLocaleDateString("es-MX", { dateStyle: "long" })}</strong></p>`
     : "";
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: params.clienteEmail,
     subject: `Tienes un entregable para revisar — ${params.clienteEmpresa}`,
@@ -113,7 +118,7 @@ export async function enviarResultadoAprobacion(params: {
   const url = `${APP_URL}/clientes/${params.clienteId}/entregables`;
   const aprobado = params.estado === "APROBADO";
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: params.amEmail,
     subject: `${aprobado ? "✅ Aprobado" : "❌ Rechazado"}: ${params.itemNombre} — ${params.clienteEmpresa}`,
@@ -149,7 +154,7 @@ export async function enviarAlertaEquipo(params: {
   };
   const c = colores[params.severidad];
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: params.emails,
     subject: `[${c.label}] ${params.titulo} — ${params.clienteEmpresa}`,
@@ -178,7 +183,7 @@ export async function enviarReporteSemanal(params: {
   if (!isResendConfigured() || params.emails.length === 0) return;
   const url = `${APP_URL}/clientes/${params.clienteId}/reportes`;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: params.emails,
     subject: `Reporte semana ${params.semana} — ${params.clienteEmpresa} (${params.avance}% avance)`,
