@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import { enviarAprobacionSolicitada, enviarResultadoAprobacion } from "@/lib/email";
 
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServer();
@@ -77,20 +76,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Email al cliente si el aprobador es CLIENTE
-    if (data.tipoAprobador === "CLIENTE" && aprobacion.cliente) {
-      const c = aprobacion.cliente;
-      await enviarAprobacionSolicitada({
-        clienteNombre: c.nombre,
-        clienteEmail: c.email,
-        clienteEmpresa: c.empresa,
-        tokenPortal: c.tokenPortal,
-        itemNombre: aprobacion.entregable?.nombre ?? aprobacion.tarea?.nombre ?? "Entregable",
-        itemTipo: aprobacion.entregable?.tipo ?? "TAREA",
-        deadline: aprobacion.deadline,
-      });
-    }
-
     return NextResponse.json(aprobacion, { status: 201 });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -128,13 +113,6 @@ export async function PATCH(request: NextRequest) {
       include: {
         tarea: true,
         entregable: true,
-        cliente: {
-          select: {
-            id: true,
-            empresa: true,
-            accountManager: { select: { email: true, nombre: true } },
-          },
-        },
       },
     });
 
@@ -162,20 +140,6 @@ export async function PATCH(request: NextRequest) {
       await prisma.entregable.update({
         where: { id: aprobacion.entregableId },
         data: { estadoAprobacion: "APROBADO" },
-      });
-    }
-
-    // Email al account manager
-    if (aprobacion.cliente?.accountManager) {
-      const am = aprobacion.cliente.accountManager;
-      await enviarResultadoAprobacion({
-        amEmail: am.email,
-        amNombre: am.nombre,
-        clienteEmpresa: aprobacion.cliente.empresa,
-        clienteId: aprobacion.clienteId,
-        itemNombre: aprobacion.entregable?.nombre ?? aprobacion.tarea?.nombre ?? "Elemento",
-        estado: data.estado,
-        motivoRechazo: data.motivoRechazo,
       });
     }
 

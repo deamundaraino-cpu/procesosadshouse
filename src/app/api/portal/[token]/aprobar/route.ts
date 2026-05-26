@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { enviarResultadoAprobacion } from "@/lib/email";
 
 const schema = z.object({
   aprobacionId: z.string(),
@@ -19,7 +18,6 @@ export async function POST(
     select: {
       id: true,
       empresa: true,
-      accountManager: { select: { email: true, nombre: true } },
     },
   });
   if (!cliente) return NextResponse.json({ error: "Token inválido" }, { status: 403 });
@@ -68,19 +66,6 @@ export async function POST(
       await prisma.entregable.update({
         where: { id: aprobacion.entregableId },
         data: { estadoAprobacion: "APROBADO" },
-      });
-    }
-
-    // Email al account manager
-    if (cliente.accountManager) {
-      await enviarResultadoAprobacion({
-        amEmail: cliente.accountManager.email,
-        amNombre: cliente.accountManager.nombre,
-        clienteEmpresa: cliente.empresa,
-        clienteId: cliente.id,
-        itemNombre: aprobacion.entregable?.nombre ?? aprobacion.tarea?.nombre ?? "Elemento",
-        estado: data.estado,
-        motivoRechazo: data.motivoRechazo,
       });
     }
 

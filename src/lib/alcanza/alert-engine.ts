@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/db";
-import { enviarAlertaEquipo } from "@/lib/email";
 
 interface AlertaGenerada {
   clienteId: string;
@@ -142,8 +141,6 @@ export async function ejecutarMotorAlertas(soloClienteId?: string): Promise<{
     },
     select: {
       id: true,
-      empresa: true,
-      accountManager: { select: { email: true, nombre: true } },
     },
   });
 
@@ -161,20 +158,7 @@ export async function ejecutarMotorAlertas(soloClienteId?: string): Promise<{
 
     for (const alerta of todas) {
       const creada = await crearAlertaSiNoExiste(alerta);
-      if (creada) {
-        alertasCreadas++;
-        // Email solo para alertas críticas
-        if (alerta.severidad === "CRITICO" && cliente.accountManager) {
-          await enviarAlertaEquipo({
-            emails: [cliente.accountManager.email],
-            clienteEmpresa: cliente.empresa,
-            clienteId: cliente.id,
-            titulo: alerta.titulo,
-            descripcion: alerta.descripcion,
-            severidad: alerta.severidad,
-          });
-        }
-      }
+      if (creada) alertasCreadas++;
     }
   }
 
