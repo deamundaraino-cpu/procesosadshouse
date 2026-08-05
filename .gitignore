@@ -29,6 +29,9 @@ yarn-error.log*
 .env*.local
 .env
 
+# respaldos de base de datos (contienen datos de clientes)
+/backups
+
 # vercel
 .vercel
 

@@ -105,6 +105,7 @@ export default async function BriefPage({
       secciones={secciones as any}
       prefillMap={prefillMap}
       pendientes={pendientes}
+      tokenPortal={cliente.tokenPortal}
     />
   );
 }

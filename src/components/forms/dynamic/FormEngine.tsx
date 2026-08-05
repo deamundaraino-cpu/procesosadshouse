@@ -44,12 +44,19 @@ export interface SeccionForm {
 export interface FormEngineProps {
   secciones: SeccionForm[];
   clienteId: string;
+  /** Endpoint de autoguardado. El portal público usa /api/portal/[token]/brief */
+  endpoint?: string;
   onComplete?: (datos: Record<string, unknown>) => void;
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export function FormEngine({ secciones, clienteId, onComplete }: FormEngineProps) {
+export function FormEngine({
+  secciones,
+  clienteId,
+  endpoint = "/api/brief",
+  onComplete,
+}: FormEngineProps) {
   const [seccionActual, setSeccionActual] = useState(0);
 
   // Inicializar con todos los prefill ya guardados (DB o IA) para no perderlos al navegar
@@ -133,7 +140,7 @@ export function FormEngine({ secciones, clienteId, onComplete }: FormEngineProps
             timestamp: new Date().toISOString(),
           }));
 
-        await fetch("/api/brief", {
+        await fetch(endpoint, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -154,7 +161,7 @@ export function FormEngine({ secciones, clienteId, onComplete }: FormEngineProps
       }
       setGuardando(false);
     },
-    [datosTotales, seccion, clienteId, esUltima, onComplete]
+    [datosTotales, seccion, clienteId, endpoint, esUltima, onComplete]
   );
 
   if (completado) {

@@ -31,10 +31,13 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Rutas públicas: login y portal cliente con token
+  // Rutas públicas: login y portal cliente con token.
+  // /api/portal/ debe ir aquí: sus endpoints se autorizan con el tokenPortal
+  // de la URL, no con sesión. Sin esto el middleware los redirige a /login.
   const isPublic =
     pathname.startsWith("/login") ||
     pathname.startsWith("/portal/") ||
+    pathname.startsWith("/api/portal/") ||
     pathname.startsWith("/api/auth");
 
   if (!user && !isPublic) {

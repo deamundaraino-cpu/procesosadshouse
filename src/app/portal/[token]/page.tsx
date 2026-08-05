@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { FASES_ALCANZA } from "@/lib/alcanza/fases";
 import { format, differenceInDays } from "date-fns";
@@ -140,6 +141,52 @@ export default async function PortalClientePage({ params }: Props) {
             <span>Día 45</span>
           </div>
         </div>
+
+        {/* Brief — el cliente lo rellena sin login */}
+        {cliente.brief.length > 0 && (() => {
+          const avanceBrief = Math.round(
+            cliente.brief.reduce((a, s) => a + s.completado, 0) / cliente.brief.length
+          );
+          const terminado = avanceBrief >= 100;
+          return (
+            <Link
+              href={`/portal/${params.token}/brief`}
+              className={`block rounded-2xl border p-6 transition-colors ${
+                terminado
+                  ? "bg-white border-slate-200 hover:border-slate-300"
+                  : "bg-indigo-50 border-indigo-200 hover:border-indigo-300"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl mt-0.5">{terminado ? "✅" : "📝"}</span>
+                  <div>
+                    <p className="font-semibold text-slate-900">
+                      {terminado ? "Brief completado" : "Completa tu brief de onboarding"}
+                    </p>
+                    <p className="text-sm text-slate-600 mt-0.5">
+                      {terminado
+                        ? "Puedes revisarlo o actualizarlo cuando quieras."
+                        : "Cuéntanos sobre tu negocio para que podamos empezar. Se guarda solo."}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-2xl font-bold text-indigo-600">{avanceBrief}%</p>
+                  <p className="text-xs text-slate-500">completado</p>
+                </div>
+              </div>
+              {!terminado && (
+                <div className="w-full bg-white rounded-full h-2 mt-4">
+                  <div
+                    className="bg-indigo-600 h-2 rounded-full transition-all"
+                    style={{ width: `${avanceBrief}%` }}
+                  />
+                </div>
+              )}
+            </Link>
+          );
+        })()}
 
         {/* Aprobaciones pendientes */}
         {aprobacionesPendientes.length > 0 && (
